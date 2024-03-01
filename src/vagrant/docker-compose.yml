@@ -1,0 +1,157 @@
+
+version: '3'
+services:
+  rabbit_mq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - 5672
+
+  postgres:
+    image: aemmazub/database
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - 5432 
+
+  session-service:
+    image: aemmazub/session
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: users_db
+    ports:
+      - 8081
+    depends_on:
+      - postgres
+
+
+  hotel-service:
+    image: aemmazub/hotel
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: hotels_db
+    ports:
+      - 8082
+    depends_on:
+      - postgres
+
+  payment-service:
+    image: aemmazub/payment
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: payments_db
+    ports:
+      - 8084
+    depends_on:
+      - postgres
+
+
+  loyalty-service:
+    image: aemmazub/loyalty
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: balances_db
+    ports:
+      - 8085
+    depends_on:
+      - postgres
+
+        
+  report-service:
+    image: aemmazub/report
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: statistics_db
+      RABBIT_MQ_HOST: rabbit_mq
+      RABBIT_MQ_PORT: 5672
+      RABBIT_MQ_USER: guest
+      RABBIT_MQ_PASSWORD: guest
+      RABBIT_MQ_QUEUE_NAME: messagequeue
+      RABBIT_MQ_EXCHANGE: messagequeue-exchange
+    ports:
+      - 8086
+    depends_on:
+      - postgres
+      - rabbit_mq
+
+  booking-service:
+    image: aemmazub/booking
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER : postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: reservations_db
+      RABBIT_MQ_HOST: rabbit_mq
+      RABBIT_MQ_PORT: 5672
+      RABBIT_MQ_USER: guest
+      RABBIT_MQ_PASSWORD: guest
+      RABBIT_MQ_QUEUE_NAME: messagequeue
+      RABBIT_MQ_EXCHANGE: messagequeue-exchange
+      HOTEL_SERVICE_HOST: hotel-service
+      HOTEL_SERVICE_PORT: 8082
+      PAYMENT_SERVICE_HOST: payment-service
+      PAYMENT_SERVICE_PORT: 8084
+      LOYALTY_SERVICE_HOST: loyalty-service
+      LOYALTY_SERVICE_PORT: 8085
+    ports:
+      - 8083
+    depends_on:
+      - postgres
+      - rabbit_mq
+
+  gateway-service:
+    image: aemmazub/gateway
+    environment:
+      SESSION_SERVICE_HOST: session-service
+      SESSION_SERVICE_PORT: 8081
+      HOTEL_SERVICE_HOST: hotel-service
+      HOTEL_SERVICE_PORT: 8082
+      BOOKING_SERVICE_HOST: booking-service
+      BOOKING_SERVICE_PORT: 8083
+      PAYMENT_SERVICE_HOST: payment-service
+      PAYMENT_SERVICE_PORT: 8084
+      LOYALTY_SERVICE_HOST: loyalty-service
+      LOYALTY_SERVICE_PORT: 8085
+      REPORT_SERVICE_HOST: report-service
+      REPORT_SERVICE_PORT: 8086
+    ports:
+      - 8087
+    depends_on:
+      - postgres
+      - session-service
+      - hotel-service
+      - booking-service
+      - payment-service
+      - loyalty-service
+      - report-service
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+
+
+  proxy:
+    image: aemmazub/myproxy
+    ports:
+      - 8081:8081
+      - 8087:8087
+    depends_on:
+      - gateway-service
+    deploy:
+      placement:
+        constraints: [node.role == manager]
